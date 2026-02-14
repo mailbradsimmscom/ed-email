@@ -19,9 +19,9 @@ const supabase = createClient(
 );
 
 const transporter = nodemailer.createTransport({
-  host: 'plus.smtp.mail.yahoo.com',
-  port: 465,
-  secure: true,
+  host: 'smtp.mail.yahoo.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.YAHOO_EMAIL,
     pass: process.env.YAHOO_PASSWORD,
