@@ -51,6 +51,45 @@ function requireApiKey(req, res, next) {
   res.status(401).json({ success: false, error: 'Invalid API key' });
 }
 
+async function resolveLocation() {
+  const { data, error } = await supabase
+    .from('gps_position')
+    .select('latitude, longitude')
+    .order('timestamp', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !data?.latitude || !data?.longitude) {
+    return 'on the boat';
+  }
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${data.latitude}&lon=${data.longitude}&format=json&zoom=14`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'ed-email-app/1.0' },
+    });
+    const geo = await res.json();
+
+    if (!geo.address) return 'on the boat';
+
+    const town = geo.address.town || geo.address.city || geo.address.village || geo.address.municipality || '';
+    const state = geo.address.state || '';
+    const country = geo.address.country || '';
+
+    // Handle Caribbean territories
+    const caribbeanTerritories = ['Guadeloupe', 'Martinique', 'Saint Martin', 'Saint Barthélemy'];
+    const territory = caribbeanTerritories.find(t =>
+      [state, geo.address.county, geo.address.region].some(v => v && v.includes(t))
+    );
+
+    if (territory) return [town, territory].filter(Boolean).join(', ');
+    if (country === 'United States') return [town, state].filter(Boolean).join(', ');
+    return [town, country].filter(Boolean).join(', ') || 'on the boat';
+  } catch {
+    return 'on the boat';
+  }
+}
+
 async function sendEmail() {
   const { data, error } = await supabase
     .from('EDemail')
@@ -70,7 +109,11 @@ async function sendEmail() {
     day: 'numeric',
   });
 
-  const fullContent = `Hello Ed,\nToday is ${today}\n\n${data.content}`;
+  // Resolve dynamic placeholders
+  const location = await resolveLocation();
+  const emailContent = data.content.replace(/\{\{location\}\}/g, location);
+
+  const fullContent = `Hello Ed,\nToday is ${today}\n\n${emailContent}`;
 
   await transporter.sendMail({
     from: process.env.YAHOO_EMAIL,
