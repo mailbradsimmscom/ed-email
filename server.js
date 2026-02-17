@@ -1,6 +1,5 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
 import cookieParser from 'cookie-parser';
 import 'dotenv/config';
 
@@ -18,15 +17,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.mail.yahoo.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.YAHOO_EMAIL,
-    pass: process.env.YAHOO_PASSWORD,
-  },
-});
+const BOATOS_URL = process.env.BOATOS_URL;
+const BOATOS_ADMIN_TOKEN = process.env.BOATOS_ADMIN_TOKEN;
 
 // --- Helpers ---
 
@@ -115,13 +107,22 @@ async function sendEmail() {
 
   const fullContent = `Hello Ed,\nToday is ${today}\n\n${emailContent}`;
 
-  await transporter.sendMail({
-    from: process.env.YAHOO_EMAIL,
-    to: 'edsimms12@gmail.com',
-    cc: 'mail@bradsimms.com, ryansimms@gmail.com',
-    subject: 'Email from Ryan and Brad about your day',
-    text: fullContent,
+  const response = await fetch(`${BOATOS_URL}/admin/api/email-proxy/send`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-token': BOATOS_ADMIN_TOKEN,
+    },
+    body: JSON.stringify({
+      to: 'edsimms12@gmail.com',
+      cc: 'mail@bradsimms.com, ryansimms@gmail.com',
+      subject: 'Email from Ryan and Brad about your day',
+      text: fullContent,
+    }),
   });
+
+  const result = await response.json();
+  if (!result.success) throw new Error(result.error);
 
   await supabase
     .from('EDemail')
