@@ -114,8 +114,8 @@ async function sendEmail() {
       'x-admin-token': BOATOS_ADMIN_TOKEN,
     },
     body: JSON.stringify({
-      to: 'edsimms12@gmail.com',
-      cc: 'mail@bradsimms.com, ryansimms@gmail.com',
+      to: 'reimaginedsv@gmail.com',
+      cc: 'mail@bradsimms.com',
       subject: 'Email from Ryan and Brad about your day',
       text: fullContent,
     }),
