@@ -327,8 +327,9 @@ app.get('/api/send', requireApiKey, async (req, res) => {
   }
 });
 
+// Minimal response for cron/uptime checks (avoids "output too large" from monitors)
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.type('text/plain').send('ok');
 });
 
 app.listen(PORT, () => {
