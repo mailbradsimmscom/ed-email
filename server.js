@@ -318,13 +318,9 @@ app.post('/api/send', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/send', requireApiKey, async (req, res) => {
-  try {
-    await sendEmail();
-    res.json({ success: true });
-  } catch (e) {
-    res.json({ success: false, error: e.message });
-  }
+app.get('/api/send', requireApiKey, (req, res) => {
+  res.json({ success: true, message: 'Email send triggered' });
+  sendEmail().catch(e => console.error('Background send failed:', e.message));
 });
 
 // Minimal response for cron/uptime checks (avoids "output too large" from monitors)
