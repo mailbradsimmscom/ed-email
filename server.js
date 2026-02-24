@@ -85,7 +85,7 @@ async function resolveLocation() {
 async function sendEmail() {
   const { data, error } = await supabase
     .from('EDemail')
-    .select('content')
+    .select('content, to_emails, cc_emails')
     .eq('id', 1)
     .single();
 
@@ -114,8 +114,8 @@ async function sendEmail() {
       'x-admin-token': BOATOS_ADMIN_TOKEN,
     },
     body: JSON.stringify({
-      to: 'reimaginedsv@gmail.com',
-      cc: 'mail@bradsimms.com',
+      to: data.to_emails || 'edsimms12@gmail.com',
+      cc: data.cc_emails || 'mail@bradsimms.com, ryansimms@gmail.com',
       subject: 'Email from Ryan and Brad about your day',
       text: fullContent,
     }),
