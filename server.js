@@ -192,6 +192,8 @@ app.get('/', requireAuth, async (req, res) => {
 
   const content = escapeHtml(data?.content || '');
   const sendTime = data?.send_time || '08:20';
+  const toEmails = escapeHtml(data?.to_emails || 'edsimms12@gmail.com');
+  const ccEmails = escapeHtml(data?.cc_emails || 'mail@bradsimms.com, ryansimms@gmail.com');
   const lastSent = data?.last_sent_at
     ? new Date(data.last_sent_at).toLocaleString('en-US', { timeZone: 'America/New_York' })
     : 'Never';
@@ -217,6 +219,9 @@ app.get('/', requireAuth, async (req, res) => {
     .time-row label { margin: 0; }
     input[type="time"] { padding: 10px 14px; font-size: 16px; border: 2px solid #e0e0e0; border-radius: 8px; }
     input[type="time"]:focus { outline: none; border-color: #4A90D9; }
+    input[type="text"] { width: 100%; padding: 10px 14px; font-size: 15px; border: 2px solid #e0e0e0; border-radius: 8px; font-family: inherit; }
+    input[type="text"]:focus { outline: none; border-color: #4A90D9; }
+    .field { margin-bottom: 16px; }
     .btn { display: block; width: 100%; padding: 14px; font-size: 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-top: 12px; }
     .btn-save { background: #4A90D9; color: white; }
     .btn-save:hover { background: #357ABD; }
@@ -239,6 +244,16 @@ app.get('/', requireAuth, async (req, res) => {
     <div class="time-row">
       <label for="sendTime">Send Time (EST):</label>
       <input type="time" id="sendTime" value="${sendTime}">
+    </div>
+
+    <div class="field">
+      <label for="toEmails">To</label>
+      <input type="text" id="toEmails" value="${toEmails}">
+    </div>
+
+    <div class="field">
+      <label for="ccEmails">CC</label>
+      <input type="text" id="ccEmails" value="${ccEmails}">
     </div>
 
     <button class="btn btn-save" onclick="save()">Save</button>
@@ -266,6 +281,8 @@ app.get('/', requireAuth, async (req, res) => {
           body: JSON.stringify({
             content: document.getElementById('content').value,
             send_time: document.getElementById('sendTime').value,
+            to_emails: document.getElementById('toEmails').value,
+            cc_emails: document.getElementById('ccEmails').value,
           }),
         });
         const data = await res.json();
@@ -295,13 +312,15 @@ app.get('/', requireAuth, async (req, res) => {
 // --- API ---
 
 app.post('/api/save', requireAuth, async (req, res) => {
-  const { content, send_time } = req.body;
+  const { content, send_time, to_emails, cc_emails } = req.body;
   const { error } = await supabase
     .from('EDemail')
     .upsert({
       id: 1,
       content,
       send_time,
+      to_emails,
+      cc_emails,
       updated_at: new Date().toISOString(),
     });
 
@@ -316,11 +335,6 @@ app.post('/api/send', requireAuth, async (req, res) => {
   } catch (e) {
     res.json({ success: false, error: e.message });
   }
-});
-
-app.get('/api/send', requireApiKey, (req, res) => {
-  res.json({ success: true, message: 'Email send triggered' });
-  sendEmail().catch(e => console.error('Background send failed:', e.message));
 });
 
 // Minimal response for cron/uptime checks (avoids "output too large" from monitors)
