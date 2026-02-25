@@ -37,99 +37,6 @@ function requireAuth(req, res, next) {
   res.redirect('/login');
 }
 
-function requireApiKey(req, res, next) {
-  const key = req.query.api_key || req.headers['x-api-key'];
-  if (key === process.env.API_KEY) return next();
-  res.status(401).json({ success: false, error: 'Invalid API key' });
-}
-
-async function resolveLocation() {
-  const { data, error } = await supabase
-    .from('gps_position')
-    .select('latitude, longitude')
-    .order('timestamp', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error || !data?.latitude || !data?.longitude) {
-    return 'on the boat';
-  }
-
-  try {
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${data.latitude}&lon=${data.longitude}&format=json&zoom=14`;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'ed-email-app/1.0' },
-    });
-    const geo = await res.json();
-
-    if (!geo.address) return 'on the boat';
-
-    const town = geo.address.town || geo.address.city || geo.address.village || geo.address.municipality || '';
-    const state = geo.address.state || '';
-    const country = geo.address.country || '';
-
-    // Handle Caribbean territories
-    const caribbeanTerritories = ['Guadeloupe', 'Martinique', 'Saint Martin', 'Saint Barthélemy'];
-    const territory = caribbeanTerritories.find(t =>
-      [state, geo.address.county, geo.address.region].some(v => v && v.includes(t))
-    );
-
-    if (territory) return [town, territory].filter(Boolean).join(', ');
-    if (country === 'United States') return [town, state].filter(Boolean).join(', ');
-    return [town, country].filter(Boolean).join(', ') || 'on the boat';
-  } catch {
-    return 'on the boat';
-  }
-}
-
-async function sendEmail() {
-  const { data, error } = await supabase
-    .from('EDemail')
-    .select('content, to_emails, cc_emails')
-    .eq('id', 1)
-    .single();
-
-  if (error || !data?.content) {
-    throw new Error('No email content found. Save content first.');
-  }
-
-  const today = new Date().toLocaleDateString('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
-  // Resolve dynamic placeholders
-  const location = await resolveLocation();
-  const emailContent = data.content.replace(/\{\{location\}\}/g, location);
-
-  const fullContent = `Hello Ed,\nToday is ${today}\n\n${emailContent}`;
-
-  const response = await fetch(`${BOATOS_URL}/admin/api/email-proxy/send`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-token': BOATOS_ADMIN_TOKEN,
-    },
-    body: JSON.stringify({
-      to: data.to_emails || 'edsimms12@gmail.com',
-      cc: data.cc_emails || 'mail@bradsimms.com, ryansimms@gmail.com',
-      subject: 'Email from Ryan and Brad about your day',
-      text: fullContent,
-    }),
-  });
-
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error);
-
-  await supabase
-    .from('EDemail')
-    .update({ last_sent_at: new Date().toISOString() })
-    .eq('id', 1);
-}
-
 // --- Routes ---
 
 app.get('/login', (req, res) => {
@@ -330,7 +237,49 @@ app.post('/api/save', requireAuth, async (req, res) => {
 
 app.post('/api/send', requireAuth, async (req, res) => {
   try {
-    await sendEmail();
+    const { data, error } = await supabase
+      .from('EDemail')
+      .select('content, to_emails, cc_emails')
+      .eq('id', 1)
+      .single();
+
+    if (error || !data?.content) {
+      return res.json({ success: false, error: 'No email content found. Save content first.' });
+    }
+
+    const today = new Date().toLocaleDateString('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const emailContent = data.content.replace(/\{\{location\}\}/g, 'on the boat');
+    const fullContent = `Hello Ed,\nToday is ${today}\n\n${emailContent}`;
+
+    const response = await fetch(`${BOATOS_URL}/admin/api/email-proxy/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': BOATOS_ADMIN_TOKEN,
+      },
+      body: JSON.stringify({
+        to: data.to_emails || 'edsimms12@gmail.com',
+        cc: data.cc_emails || 'mail@bradsimms.com, ryansimms@gmail.com',
+        subject: 'Email from Ryan and Brad about your day',
+        text: fullContent,
+      }),
+    });
+
+    const result = await response.json();
+    if (!result.success) return res.json({ success: false, error: result.error });
+
+    await supabase
+      .from('EDemail')
+      .update({ last_sent_at: new Date().toISOString() })
+      .eq('id', 1);
+
     res.json({ success: true });
   } catch (e) {
     res.json({ success: false, error: e.message });
